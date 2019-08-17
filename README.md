@@ -1,3 +1,7 @@
+NOTE
+=============
+This branch contains XaLogic specific code for XAPIZ3500
+
 Python Spidev
 =============
 

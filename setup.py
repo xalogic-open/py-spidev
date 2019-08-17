@@ -23,16 +23,16 @@ classifiers = ['Development Status :: 5 - Production/Stable',
                'Topic :: System :: Hardware',
                'Topic :: System :: Hardware :: Hardware Drivers']
 
-setup(	name		= "spidev",
+setup(	name		= "xaspidev",
 	version		= version,
 	description	= "Python bindings for Linux SPI access through spidev",
 	long_description= open('README.md').read() + "\n" + open('CHANGELOG.md').read(),
-	author		= "Volker Thoms",
+	author		= "Original : VolkerThoms, Modfied by XaLogic",
 	author_email	= "unconnected@gmx.de",
-	maintainer	= "Stephen Caudle",
-	maintainer_email= "scaudle@doceme.com",
+	maintainer	= "XaLogic",
+	maintainer_email= "contact@xalogic.com",
 	license		= "GPLv2",
 	classifiers	= classifiers,
 	url		= "http://github.com/doceme/py-spidev",
-	ext_modules	= [Extension("spidev", ["spidev_module.c"])]
+	ext_modules	= [Extension("xaspidev", ["spidev_module.c"])]
 )
