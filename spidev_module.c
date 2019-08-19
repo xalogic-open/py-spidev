@@ -472,13 +472,14 @@ uint32_t xa_get_wrspace(int fd, uint16_t delay_usecs, uint32_t speed_hz, uint8_t
 	txbuf[0] = 0x88; txbuf[1] = 0x00; txbuf[2] = 0x00;
 	len = 3;
 
+	Py_BEGIN_ALLOW_THREADS
 	xfer.tx_buf = (unsigned long)&txbuf;
 	xfer.rx_buf = (unsigned long)&rxbuf;
 	xfer.len = len;
 	xfer.delay_usecs = delay_usecs;
 	xfer.speed_hz = speed_hz;
 	xfer.bits_per_word = bits_per_word;
-	Py_BEGIN_ALLOW_THREADS
+	
 	status = ioctl(fd, SPI_IOC_MESSAGE(1), &xfer);
 	Py_END_ALLOW_THREADS
 
@@ -490,13 +491,14 @@ uint32_t xa_get_wrspace(int fd, uint16_t delay_usecs, uint32_t speed_hz, uint8_t
 
         txbuf[0] = 0x89;
 
+	Py_BEGIN_ALLOW_THREADS
         xfer.tx_buf = (unsigned long)&txbuf;
         xfer.rx_buf = (unsigned long)&rxbuf;
         xfer.len = len;
         xfer.delay_usecs = delay_usecs;
 	xfer.speed_hz = speed_hz;
 	xfer.bits_per_word = bits_per_word;
-	Py_BEGIN_ALLOW_THREADS
+
         status = ioctl(fd, SPI_IOC_MESSAGE(1), &xfer);
 	Py_END_ALLOW_THREADS
 
@@ -535,13 +537,14 @@ uint32_t xa_get_rdavail(int fd, uint16_t delay_usecs, uint32_t speed_hz, uint8_t
 
 	txbuf[0] = 0x8A; txbuf[1] = 0x00; txbuf[2] = 0x00;
 
+	Py_BEGIN_ALLOW_THREADS
 	xfer.tx_buf = (unsigned long)&txbuf;
 	xfer.rx_buf = (unsigned long)&rxbuf;
 	xfer.len = len;
 	xfer.delay_usecs = delay_usecs;
 	xfer.speed_hz = speed_hz;
 	xfer.bits_per_word = bits_per_word;
-	Py_BEGIN_ALLOW_THREADS
+	
 	status = ioctl(fd, SPI_IOC_MESSAGE(1), &xfer);
 	Py_END_ALLOW_THREADS
 
@@ -553,13 +556,14 @@ uint32_t xa_get_rdavail(int fd, uint16_t delay_usecs, uint32_t speed_hz, uint8_t
 
         txbuf[0] = 0x8B;
 
+	Py_BEGIN_ALLOW_THREADS
         xfer.tx_buf = (unsigned long)&txbuf;
         xfer.rx_buf = (unsigned long)&rxbuf;
         xfer.len = len;
         xfer.delay_usecs = delay_usecs;
 	xfer.speed_hz = speed_hz;
 	xfer.bits_per_word = bits_per_word;
-	Py_BEGIN_ALLOW_THREADS
+	
         status = ioctl(fd, SPI_IOC_MESSAGE(1), &xfer);
 	Py_END_ALLOW_THREADS
 
@@ -645,7 +649,7 @@ XaSpiDev_xa_writebulk(XaSpiDevObject *self, PyObject *args)
 				cmdbufptr = bufptr+block_start-1;
 				*cmdbufptr = 0x10;
 
-				while (xa_get_wrspace(self->fd, 0, self->max_speed_hz, self->bits_per_word, self->mode) < 1); 
+				while (xa_get_wrspace(self->fd, 0, self->max_speed_hz, self->bits_per_word, self->mode) < block_size); 
 		                Py_BEGIN_ALLOW_THREADS
                 		status = write(self->fd, buffer.buf + block_start-1, block_size+1);
                 		Py_END_ALLOW_THREADS
