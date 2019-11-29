@@ -36,7 +36,7 @@
 #include <linux/ioctl.h>
 #include <time.h>
 
-#define _VERSION_ "3.4-0.1"
+#define _VERSION_ "3.4-0.2"
 #define SPIDEV_MAXPATH 4096
 
 #define BLOCK_SIZE_CONTROL_FILE "/sys/module/spidev/parameters/xabufsiz"
@@ -627,10 +627,12 @@ XaSpiDev_xa_writebulk(XaSpiDevObject *self, PyObject *args)
 			//Send 1 byte first
 			while (xa_get_wrspace(self->fd, 0, self->max_speed_hz, self->bits_per_word, self->mode) < 1); 
 
+			Py_INCREF(obj);
 			//form the command with first byte
 			bufptr = buffer.buf;
 			firsttx[0] = 0x10;
 			firsttx[1] = *bufptr;
+			Py_DECREF(obj);
 
 
 			status = write(self->fd, &firsttx, 2);
@@ -646,8 +648,10 @@ XaSpiDev_xa_writebulk(XaSpiDevObject *self, PyObject *args)
 			while (block_start < buffer.len) {
 				block_size = (remain < spi_max_block) ? remain : spi_max_block;
 				//Insert cmd
+			        Py_INCREF(obj);
 				cmdbufptr = bufptr+block_start-1;
 				*cmdbufptr = 0x10;
+			        Py_DECREF(obj);
 
 				while (xa_get_wrspace(self->fd, 0, self->max_speed_hz, self->bits_per_word, self->mode) < block_size); 
 		                Py_BEGIN_ALLOW_THREADS
@@ -675,6 +679,7 @@ XaSpiDev_xa_writebulk(XaSpiDevObject *self, PyObject *args)
 			//diff_t = (double)(time1_t - time0_t ) / CLOCKS_PER_SEC;
    			//printf("Bulk time = %f\n", diff_t);
 
+			Py_INCREF(Py_None);
 			return Py_None;
 		}
 	} 
@@ -711,12 +716,12 @@ XaSpiDev_xa_readmeta(XaSpiDevObject *self)
 
    	//printf("Debug0\n");
 
-	rxlist = PyList_New(1);
 
 	rdavail_cnt =  xa_get_rdavail(self->fd, 0, self->max_speed_hz, self->bits_per_word, self->mode);
 
 
 	if (rdavail_cnt < 4) {
+	        rxlist = PyList_New(1);
 		PyObject *val = Py_BuildValue("l", (long)tx_lencmd[2]); //Just reusing tx_lencmd[2]. Send 0.
                 PyList_SET_ITEM(rxlist, 0, val);
 		return rxlist;
@@ -742,9 +747,8 @@ XaSpiDev_xa_readmeta(XaSpiDevObject *self)
    		//printf("Debug3\n");
 		if (meta_len == 0) {
 			rxlist = PyList_New(2);
-			PyObject *val = Py_BuildValue("l", (long)tx_lencmd[2]); //Just reusing tx_lencmd[2]. Send 0.
-                	PyList_SET_ITEM(rxlist, 0, val);
-                	PyList_SET_ITEM(rxlist, 1, val);
+                	PyList_SET_ITEM(rxlist, 0, PyLong_FromLong(0));
+                	PyList_SET_ITEM(rxlist, 1, PyLong_FromLong(0));
 
 			return rxlist;
 		}
@@ -801,7 +805,6 @@ XaSpiDev_xa_readmeta(XaSpiDevObject *self)
         free(txbuf);
         free(rxbuf);
         Py_END_ALLOW_THREADS
-
 
         return rxlist;
 }
