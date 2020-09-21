@@ -36,7 +36,7 @@
 #include <linux/ioctl.h>
 #include <time.h>
 
-#define _VERSION_ "3.4-0.2"
+#define _VERSION_ "3.4-0.3"
 #define SPIDEV_MAXPATH 4096
 
 #define BLOCK_SIZE_CONTROL_FILE "/sys/module/spidev/parameters/xabufsiz"
@@ -653,7 +653,13 @@ XaSpiDev_xa_writebulk(XaSpiDevObject *self, PyObject *args)
 				*cmdbufptr = 0x10;
 			        Py_DECREF(obj);
 
-				while (xa_get_wrspace(self->fd, 0, self->max_speed_hz, self->bits_per_word, self->mode) < block_size); 
+				while (xa_get_wrspace(self->fd, 0, self->max_speed_hz, self->bits_per_word, self->mode) < block_size) {};
+				//while (xa_get_wrspace(self->fd, 0, self->max_speed_hz, self->bits_per_word, self->mode) < block_size) 
+                                //{
+   			          //printf("stalled\n");
+				//} 
+
+
 		                Py_BEGIN_ALLOW_THREADS
                 		status = write(self->fd, buffer.buf + block_start-1, block_size+1);
                 		Py_END_ALLOW_THREADS
@@ -754,6 +760,135 @@ XaSpiDev_xa_readmeta(XaSpiDevObject *self)
 		}
    		//printf("Debug4\n");
 		meta_len = meta_len*16;
+   		//printf("Debug5\n");
+	}
+
+	//Now fetch the meta data based on meta_len
+
+        Py_BEGIN_ALLOW_THREADS
+        txbuf = malloc(sizeof(__u8) * (meta_len+2));
+        rxbuf = malloc(sizeof(__u8) * (meta_len+2));
+        Py_END_ALLOW_THREADS
+
+   	//printf("Debug6\n");
+	*txbuf = 0xA0;
+   	//printf("Debug7\n");
+	
+        xfer.tx_buf = (unsigned long)txbuf;
+        xfer.rx_buf = (unsigned long)rxbuf;
+        xfer.len = meta_len+2;
+        xfer.delay_usecs = 0;
+        xfer.speed_hz = self->max_speed_hz;
+        xfer.bits_per_word = self->bits_per_word;
+
+	while (xa_get_rdavail(self->fd, 0, self->max_speed_hz, self->bits_per_word, self->mode) < meta_len);
+
+
+        Py_BEGIN_ALLOW_THREADS
+        status = ioctl(self->fd, SPI_IOC_MESSAGE(1), &xfer);
+        Py_END_ALLOW_THREADS
+   	//printf("Debug8\n");
+        if (status < 0) {
+                PyErr_SetFromErrno(PyExc_IOError);
+                free(txbuf);
+                free(rxbuf);
+                return NULL;
+        }
+	rxlist = PyList_New(meta_len);
+        for (ii = 0; ii < meta_len; ii++) {
+                PyObject *val = Py_BuildValue("l", (long)rxbuf[ii+2]);
+                PyList_SET_ITEM(rxlist, ii, val);
+        }
+   	//printf("Debug9\n");
+        // WA:
+        // in CS_HIGH mode CS isnt pulled to low after transfer
+        // reading 0 bytes doesn't really matter but brings CS down
+        // tomdean:
+        // Stop generating an extra CS except in mode CS_HOGH
+        if (self->mode & SPI_CS_HIGH) status = read(self->fd, &rxbuf[0], 0);
+
+        Py_BEGIN_ALLOW_THREADS
+        free(txbuf);
+        free(rxbuf);
+        Py_END_ALLOW_THREADS
+
+        return rxlist;
+}
+
+PyDoc_STRVAR(XaSpiDev_xa_readmeta2_doc,
+	"xa_readmeta([len]) -> None\n\n"
+	"Read meta data from XAPIZ3500 SPI device.\n"
+	"len must be a integer.\n");
+
+static PyObject *
+XaSpiDev_xa_readmeta2(XaSpiDevObject *self, PyObject *args)
+{
+	int		status, ii;
+	uint32_t	rdavail_cnt;
+
+
+	PyObject 	*rxlist;
+
+        uint8_t 	*txbuf, *rxbuf;
+        uint32_t 	meta_len;
+
+        struct spi_ioc_transfer xfer;
+        Py_BEGIN_ALLOW_THREADS
+        memset(&xfer, 0, sizeof(xfer));
+        Py_END_ALLOW_THREADS
+
+        uint8_t		tx_lencmd[6];
+        uint8_t		rx_lencmd[6];
+
+        uint8_t		metasize;
+
+	if (!PyArg_ParseTuple(args, "i", &metasize)) {
+		return NULL;
+	}
+
+	tx_lencmd[0] = 0xA0; tx_lencmd[1] = 0x00; tx_lencmd[2] = 0x00; 
+	tx_lencmd[3] = 0x00; tx_lencmd[4] = 0x00; tx_lencmd[5] = 0x00; 
+
+   	//printf("Debug0\n");
+
+
+	rdavail_cnt =  xa_get_rdavail(self->fd, 0, self->max_speed_hz, self->bits_per_word, self->mode);
+
+
+	if (rdavail_cnt < 4) {
+	        rxlist = PyList_New(1);
+		PyObject *val = Py_BuildValue("l", (long)tx_lencmd[2]); //Just reusing tx_lencmd[2]. Send 0.
+                PyList_SET_ITEM(rxlist, 0, val);
+		return rxlist;
+	} else {
+	//Read 4 bytes to get length of meta
+   		//printf("Debug1\n");
+	        Py_BEGIN_ALLOW_THREADS
+        	xfer.tx_buf = (unsigned long)&tx_lencmd;
+        	xfer.rx_buf = (unsigned long)&rx_lencmd;
+        	xfer.len = 6;
+        	xfer.delay_usecs = 0;
+        	xfer.speed_hz = self->max_speed_hz;
+        	xfer.bits_per_word = self->bits_per_word;
+   		//printf("Debug2\n");
+
+        	status = ioctl(self->fd, SPI_IOC_MESSAGE(1), &xfer);
+        	Py_END_ALLOW_THREADS
+        	if (status < 0) {
+                	PyErr_SetFromErrno(PyExc_IOError);
+                	return NULL;
+        	}
+		meta_len = ((rx_lencmd[2]) + (256*rx_lencmd[3]));
+   		//printf("Debug3\n");
+		if (meta_len == 0) {
+			rxlist = PyList_New(2);
+                	PyList_SET_ITEM(rxlist, 0, PyLong_FromLong(0));
+                	PyList_SET_ITEM(rxlist, 1, PyLong_FromLong(0));
+
+			return rxlist;
+		}
+   		//printf("Debug4\n");
+		meta_len = meta_len*metasize;
    		//printf("Debug5\n");
 	}
 
@@ -1805,6 +1940,8 @@ static PyMethodDef XaSpiDev_methods[] = {
 		XaSpiDev_xa_writebulk_doc},
 	{"xa_readmeta", (PyCFunction)XaSpiDev_xa_readmeta, METH_VARARGS,
 		XaSpiDev_xa_readmeta_doc},
+	{"xa_readmeta2", (PyCFunction)XaSpiDev_xa_readmeta2, METH_VARARGS,
+		XaSpiDev_xa_readmeta2_doc},
 	{"xfer", (PyCFunction)XaSpiDev_xfer, METH_VARARGS,
 		XaSpiDev_xfer_doc},
 	{"xfer2", (PyCFunction)XaSpiDev_xfer2, METH_VARARGS,
